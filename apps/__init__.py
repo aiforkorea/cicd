@@ -3,9 +3,12 @@ import os, logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask
 from werkzeug.security import generate_password_hash
+
+from apps.dbmodels import Permission
 from .extensions import db, migrate, login_manager, csrf, mail
 from .config import Config # 기본 설정
 from apps.auth.utils import oauth, register_social_login # 이름 맞추기
+from .utils import seed_db  # 위에서 만든 함수 가져오기
 
 def create_app(config_class=Config): # 설정 클래스를 인자로 받음(테스트를 위해 추가 필요함)
     app = Flask(__name__)
@@ -34,7 +37,7 @@ def create_app(config_class=Config): # 설정 클래스를 인자로 받음(테�
         from apps.auth.utils import register_social_login # 이름을 utils.py와 맞춤
         register_social_login(app)
         
-    from .dbmodels import User, UserType
+    from .dbmodels import User
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -46,30 +49,45 @@ def create_app(config_class=Config): # 설정 클래스를 인자로 받음(테�
         flash('로그인이 필요합니다.', 'warning')
         return redirect(url_for('auth.login', next=request.path))
 
-    @app.context_processor
-    def inject_user_type():
-        return {'UserType': UserType}
-
     from .main import main
     from .auth import auth
     app.register_blueprint(main)
     app.register_blueprint(auth, url_prefix='/auth')
 
     with app.app_context():
-        # 테스트 시에는 drop_all을 conftest에서 관리하므로 여기서는 create_all만 보장
+        # 1. 소셜 로그인 설정
+        from apps.auth.utils import register_social_login
+        register_social_login(app)
+        
+        # 2. DB 테이블 생성 (운영시는 migrate 권장이나 초기엔 create_all)
         db.drop_all()         # 운영시에는 커멘트 처리 필요
         db.create_all()
-        admin_username = app.config.get('ADMIN_USERNAME')
-        admin_password = app.config.get('ADMIN_PASSWORD')
-        if admin_username and admin_password:
-            if not User.query.filter_by(username=admin_username).first():
+        
+        # 3. [추가] 기본 권한/역할 자동 생성 실행!
+        seed_db(app)
+
+        # 4. 관리자 계정 생성 로직 수정
+        from .dbmodels import User, Role # Role 추가
+        admin_email = app.config.get('ADMIN_EMAIL')
+        if admin_email:
+            if not User.query.filter_by(email=admin_email).first():
+                admin_role = Role.query.filter_by(name='ADMIN').first()
                 new_admin = User(
-                    username=admin_username, 
-                    email=app.config.get('ADMIN_EMAIL'), 
-                    password=admin_password, # dbmodels의 password 세터 사용 가정
-                    user_type=UserType.ADMIN,
-                    confirmed=True # 관리자는 자동 인증
+                    username=app.config.get('ADMIN_USERNAME'),
+                    email=admin_email,
+                    password=app.config.get('ADMIN_PASSWORD'),
+                    role=admin_role, # 이제 UserType 대신 role을 넣어요!
+                    confirmed=True
                 )
                 db.session.add(new_admin)
                 db.session.commit()
+                print("관리자 계정 생성 완료!")
+
+    # ... (템플릿용 변수 설정 부분 수정) ...
+    @app.context_processor
+    def inject_permissions():
+        # 이제 템플릿(HTML)에서 Permission 모델을 직접 조회할 수 있어요.
+        from .dbmodels import Permission
+        return dict(Permission=Permission)
+
     return app

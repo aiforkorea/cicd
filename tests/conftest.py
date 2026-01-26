@@ -6,20 +6,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from apps import create_app
 from apps.config import TestingConfig
 from apps.extensions import db
-from apps.dbmodels import User, UserType
+from apps.dbmodels import User
 
 @pytest.fixture
 def app():
     app = create_app(TestingConfig)
-# 추가적인 런타임 값 주입이 필요한 경우에만 update 사용
-    app.config.update({
-        "ADMIN_USERNAME": "admin",
-        "ADMIN_PASSWORD": "4321",
-        "ADMIN_EMAIL": "admin@example.com"
-    })
+    # create_app 안에 이미 db.create_all()과 seed_db()가 포함되어 있으므로
+    # 별도의 생성 코드 없이 바로 사용 가능합니다.
     with app.app_context():
-        # create_app 내부에 이미 db.create_all()과 관리자 생성이 있다면, 추가 작업 없이 yield만 입력
-        db.create_all()
         yield app
         db.session.remove()
         db.drop_all()
@@ -30,9 +24,11 @@ def client(app):
 
 @pytest.fixture
 def auth_client(client, app):
-    """일반 사용자로 로그인된 클라이언트를 반환합니다."""
     with app.app_context():
-        user = User(username='testuser', email='test@test.com', password='password123', user_type=UserType.USER)
+        from apps.dbmodels import Role
+        user_role = Role.query.filter_by(name='USER').first()
+        user = User(username='testuser', email='test@test.com', 
+                    password='password123', role=user_role, confirmed=True)
         db.session.add(user)
         db.session.commit()
     client.post('/auth/login', data={'email': 'test@test.com', 'password': 'password123'}, follow_redirects=True)
