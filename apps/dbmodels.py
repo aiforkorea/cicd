@@ -100,7 +100,7 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f'<User {self.username}>'
 
-# --- 4. 서비스 및 구독 모델 ---
+# --- 4. 서비스 및 구독  모델 ---
 
 class Service(db.Model):
     __tablename__ = "services"
