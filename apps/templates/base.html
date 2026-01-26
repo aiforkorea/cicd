@@ -24,14 +24,18 @@
 {#                        <a class="nav-link" href="{{ url_for('mypagex.dashboard') }}">마이페이지</a>  #}
 {#                     <a class="nav-link" href="{{ url_for('user.mypage') }}">마이페이지</a>   #}
                     </li>
-                    {% if current_user.user_type==UserType.ADMIN %} {# 관리자에게만 보이는 메뉴 #}
+                    {% if current_user.can('admin_access') %}
                         <li class="nav-item">
-                         <a class="nav-link" href="#">관리자</a>
-{#                         <a class="nav-link" href="{{ url_for('adminx.dashboard') }}">관리자</a>   #}
+                            <a class="nav-link text-warning" href="#">관리자 대시보드</a>
                         </li>
-                        <li class="nav-item">
-{#                            <a class="nav-link" href="{{ url_for('adminx.dashboard') }}">대시보드</a></li>   #}
                     {% endif %}
+
+                    {% if current_user.can('expert_service') %}
+                        <li class="nav-item">
+                            <a class="nav-link text-info" href="#">전문가 도구</a>
+                        </li>
+                    {% endif %}
+
                 {% endif %}
             </ul>
             <ul class="navbar-nav">

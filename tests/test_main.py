@@ -1,6 +1,6 @@
 # tests/test_main.py
 import pytest
-from apps.dbmodels import User, UserType
+from apps.dbmodels import User
 from apps.extensions import db, mail
 def test_main_index(client):
     response = client.get('/')
