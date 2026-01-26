@@ -45,7 +45,6 @@ def seed_db(app):
     print("기본 권한 및 역할 설정 완료!")
 
     # 관리자 계정 생성 부분 수정
-    from apps.dbmodels import User, Role
     admin_email = app.config.get('ADMIN_EMAIL')
     if admin_email:
         admin = User.query.filter_by(email=admin_email).first()
