@@ -7,6 +7,8 @@ from apps.extensions import db
 from apps.dbmodels import User, Role
 from .forms import ResetPasswordForm, ResetPasswordRequestForm, SignUpForm, LoginForm
 from . import auth  # 현재 패키지(__init__.py)의 auth Blueprint 객체 임포트
+from apps.auth.decorators import permission_required # 경비원 임포트
+from flask_login import login_required
 
 # index 엔드포인트
 @auth.route("/")
@@ -167,7 +169,7 @@ def google_authorize():
                 # password_hash는 None으로 들어감 (nullable=True이므로 허용됨)  
         )
 
-        # [추가] 2. 구글 사용자에게도 'USER' 이름표 달아주기
+        # [추가] 2. 구글 사용자에게도 'USER' 이름표 달아주기   다대다 관계
         user_role = Role.query.filter_by(name='USER').first()
         if user_role:
             user.roles.append(user_role)
@@ -178,3 +180,10 @@ def google_authorize():
     login_user(user)
     flash(f"{user.username}님, 구글 계정으로 로그인되었습니다!", "success")
     return redirect(url_for('main.index'))
+
+@auth.route('/expert-only')
+@login_required # 일단 로그인은 해야 하고
+@permission_required('expert_service') # '전문가 서비스' 이름표가 있어야 통과!
+def expert_page():
+    return "<h1>환영합니다, 전문가님!</h1><p>이곳은 전문가 전용 비밀 페이지입니다.</p>"
+

@@ -76,9 +76,9 @@ def create_app(config_class=Config): # 설정 클래스를 인자로 받음(테�
                     username=app.config.get('ADMIN_USERNAME'),
                     email=admin_email,
                     password=app.config.get('ADMIN_PASSWORD'),
-                    role=admin_role, # 이제 UserType 대신 role을 넣어요!
                     confirmed=True
                 )
+                new_admin.roles.append(admin_role) # 리스트에 추가 (다대다 확인)
                 db.session.add(new_admin)
                 db.session.commit()
                 print("관리자 계정 생성 완료!")

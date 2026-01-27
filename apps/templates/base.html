@@ -32,7 +32,7 @@
 
                     {% if current_user.can('expert_service') %}
                         <li class="nav-item">
-                            <a class="nav-link text-info" href="#">전문가 도구</a>
+                            <a class="nav-link text-info" href="{{ url_for('auth.expert_page') }}">전문가 도구</a>
                         </li>
                     {% endif %}
 
