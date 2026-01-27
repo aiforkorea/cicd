@@ -4,7 +4,7 @@ from flask import current_app, render_template, flash, url_for, redirect, reques
 from flask_login import current_user, login_user, logout_user
 from apps.auth.utils import confirm_token, generate_token, send_email, oauth
 from apps.extensions import db
-from apps.dbmodels import User
+from apps.dbmodels import User, Role
 from .forms import ResetPasswordForm, ResetPasswordRequestForm, SignUpForm, LoginForm
 from . import auth  # 현재 패키지(__init__.py)의 auth Blueprint 객체 임포트
 
@@ -18,10 +18,17 @@ def index():
 def signup():
     form = SignUpForm()
     if form.validate_on_submit():
+        # 1. 새 사용자 객체 생성
         user = User(
             username=form.username.data, email=form.email.data,
             password=form.password.data, confirmed=False # 기본값 미인증
         )
+
+        # [추가] 2. 'USER' 역할(이름표)을 찾아서 달아주기
+        user_role = Role.query.filter_by(name='USER').first()
+        if user_role:
+            user.roles.append(user_role) # 다대다 관계이므로 append 사용!
+
         db.session.add(user)
         db.session.commit()
         # 토큰 생성 및 메일 발송
@@ -154,11 +161,17 @@ def google_authorize():
     user = User.query.filter_by(email=user_info['email']).first()
     
     if not user:
-        # 처음 온 사람이라면 회원가입 시켜주기
+        # 1. 처음 온 사람이라면 회원가입 시켜주기
         user = User(username=user_info['name'], email=user_info['email'], confirmed=True,
                 confirmed_at=datetime.now() # 인증 시간 기록
                 # password_hash는 None으로 들어감 (nullable=True이므로 허용됨)  
         )
+
+        # [추가] 2. 구글 사용자에게도 'USER' 이름표 달아주기
+        user_role = Role.query.filter_by(name='USER').first()
+        if user_role:
+            user.roles.append(user_role)
+
         db.session.add(user)
         db.session.commit()
     

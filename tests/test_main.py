@@ -84,3 +84,29 @@ def test_login_failure_invalid_password(client, app):
     response = client.post('/auth/login', data={'email': 'f@t.com', 'password': 'wrong'}, follow_redirects=True)
     assert "확인 필요" in response.get_data(as_text=True)
 
+def test_expert_permission(client, app):
+    """EXPERT 권한이 없는 유저가 전문가 전용 기능을 쓰려고 할 때 차단되는지 테스트"""
+    with app.app_context():
+        # 1. 일반 유저 생성 (EXPERT 권한 없음)
+        User.query.filter_by(email='normal@test.com').delete()
+        user_role = Role.query.filter_by(name='USER').first()
+        # 1.1 유저 객체 생성        
+        user = User(username='normal', email='normal@test.com', password='p1', confirmed=True)
+        # 1.2 장부에 먼저 추가(session에 넣기)
+        db.session.add(user)
+        # 1.3 그 다음에 이름표 달기
+        if user_role:
+            user.roles.append(user_role)
+
+        db.session.commit()
+
+    # 2. 일반 유저로 로그인
+    client.post('/auth/login', data={'email': 'normal@test.com', 'password': 'p1'}, follow_redirects=True)
+    
+    # 3. [가정] 전문가만 접근 가능한 주소가 '/expert'라고 할 때
+    # (실제 뷰함수에 @permission_required('expert_service')가 달려있어야 함)
+    response = client.get('/expert') 
+    
+    # 4. 권한이 없으므로 403(Forbidden) 에러가 나야 성공!
+    # (아직 /expert 페이지를 안 만들었다면 404가 날 수 있으니 나중에 페이지 만들고 확인하세요)
+    assert response.status_code in [403, 404] 

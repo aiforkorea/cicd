@@ -7,7 +7,6 @@ from apps import create_app
 from apps.config import TestingConfig
 from apps.extensions import db
 from apps.dbmodels import User
-
 @pytest.fixture
 def app():
     app = create_app(TestingConfig)
@@ -17,18 +16,22 @@ def app():
         yield app
         db.session.remove()
         db.drop_all()
-
 @pytest.fixture
 def client(app):
     return app.test_client()
-
 @pytest.fixture
 def auth_client(client, app):
     with app.app_context():
         from apps.dbmodels import Role
+        # 'USER' 이름표 가져오기
         user_role = Role.query.filter_by(name='USER').first()
+        # 테스트 유저 생성
         user = User(username='testuser', email='test@test.com', 
-                    password='password123', role=user_role, confirmed=True)
+                    password='password123', confirmed=True)
+        # [수정] 다대다 관계에 맞게 append 사용
+        if user_role:
+            user.roles.append(user_role)
+        #user = User(username='testuser', email='test@test.com', password='password123', role=user_role, confirmed=True) 일대다 방식으로 삭제 필수
         db.session.add(user)
         db.session.commit()
     client.post('/auth/login', data={'email': 'test@test.com', 'password': 'password123'}, follow_redirects=True)
