@@ -90,23 +90,71 @@ def test_expert_permission(client, app):
         # 1. 일반 유저 생성 (EXPERT 권한 없음)
         User.query.filter_by(email='normal@test.com').delete()
         user_role = Role.query.filter_by(name='USER').first()
-        # 1.1 유저 객체 생성        
+        # 1.1 일반 유저 객체 생성        
         user = User(username='normal', email='normal@test.com', password='p1', confirmed=True)
         # 1.2 장부에 먼저 추가(session에 넣기)
         db.session.add(user)
-        # 1.3 그 다음에 이름표 달기
+        # 1.3 그 다음에 이름표 달기(USER 역할만 제공, EXPERT 역할은 제공안함)
         if user_role:
             user.roles.append(user_role)
-
         db.session.commit()
 
     # 2. 일반 유저로 로그인
     client.post('/auth/login', data={'email': 'normal@test.com', 'password': 'p1'}, follow_redirects=True)
     
-    # 3. [가정] 전문가만 접근 가능한 주소가 '/expert'라고 할 때
+    # 3. [가정] 전문가 전용 페이지 접속 시도 'auth/expert-only'라고 할 때
     # (실제 뷰함수에 @permission_required('expert_service')가 달려있어야 함)
-    response = client.get('/expert') 
+    response = client.get('/auth/expert-only') 
     
     # 4. 권한이 없으므로 403(Forbidden) 에러가 나야 성공!
     # (아직 /expert 페이지를 안 만들었다면 404가 날 수 있으니 나중에 페이지 만들고 확인하세요)
     assert response.status_code in [403, 404] 
+
+def test_logout_process(auth_client):
+    """테스트 6: 로그아웃하면 비밀 페이지에 못 들어가는지 확인"""
+    # 1. 이미 로그인된 상태(auth_client)에서 로그아웃 버튼 클릭
+    auth_client.get('/auth/logout', follow_redirects=True)
+    
+    # 2. 로그아웃 후 전문가 전용 페이지(/auth/expert-only)에 다시 접속 시도
+    response = auth_client.get('/auth/expert-only')
+    
+    # 3. 로그인이 풀렸으므로 로그인 페이지로 쫓겨나거나(302), 접근 거부되어야 함
+    # 보통 flask-login은 로그인 안 된 유저를 로그인 페이지로 리다이렉트(302) 시킵니다.
+    assert response.status_code in [302, 401]
+
+def test_signup_duplicate_email(client, app):
+    """테스트 7: 이미 가입된 이메일로 또 가입하려고 할 때 막아주는지 확인"""
+    with app.app_context():
+        # 1. 미리 'king@test.com'이라는 유저를 만들어 둠
+        User.query.filter_by(email='king@test.com').delete()
+        user = User(username='king', email='king@test.com', password='p1', confirmed=True)
+        db.session.add(user)
+        db.session.commit()
+
+    # 2. 똑같은 이메일로 다시 가입 시도
+    response = client.post('/auth/signup', data={
+        'username': 'fake_king',
+        'email': 'king@test.com',
+        'password': 'p2',
+        'confirm_password': 'p2'
+    }, follow_redirects=True)
+
+    # 3. 화면에 "이미 사용 중" 또는 "이미 가입된"이라는 경고 문구가 나와야 함
+    assert "이미 사용 중" in response.get_data(as_text=True) or "이미 가입된" in response.get_data(as_text=True)
+
+def test_password_reset_request(client, app):
+    """테스트 8: 비밀번호 재설정 메일이 잘 가는지 확인"""
+    with app.app_context():
+        # 1. 비밀번호를 바꿀 유저 준비
+        User.query.filter_by(email='forgot@test.com').delete()
+        user = User(username='lost', email='forgot@test.com', password='old_password', confirmed=True)
+        db.session.add(user)
+        db.session.commit()
+
+    with mail.record_messages() as outbox:
+        # 2. "비밀번호 잊어버렸어요" 페이지에서 이메일 제출
+        client.post('/auth/reset-password-request', data={'email': 'forgot@test.com'}, follow_redirects=True)
+        
+        # 3. 실제로 재설정 링크가 담긴 메일이 1통 발송되었는지 확인
+        assert len(outbox) == 1
+        assert "비밀번호 재설정" in outbox[0].subject
