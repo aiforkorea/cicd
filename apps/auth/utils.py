@@ -6,6 +6,7 @@ from apps.extensions import mail
 from threading import Thread
 from authlib.integrations.flask_client import OAuth # OAuth 라이브러리 임포트
 from flask import current_app
+from apps.extensions import db          # 공통 DB 도구
 
 # oauth 객체 생성
 oauth = OAuth() 
@@ -19,12 +20,14 @@ def confirm_token(token, salt, expiration=3600):
         return serializer.loads(token, salt=salt, max_age=expiration)
     except:
         return False
+
 def send_async_email(app, msg):
     with app.app_context():
         try:
             mail.send(msg)
         except Exception as e:
             app.logger.error(f"비동기 메일 전송 실패: {e}")
+
 def send_email(subject, to, template, **kwargs):
     app = current_app._get_current_object()
     # 발신자 설정 확인
@@ -49,3 +52,14 @@ def register_social_login(app):
         server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
         client_kwargs={'scope': 'openid email profile'}
     )
+
+def upgrade_user_to_premium(user):
+    from apps.dbmodels import Role
+    # 1. 'PREMIUM'이라는 이름표를 찾습니다.
+    premium_role = Role.query.filter_by(name='PREMIUM').first()
+    # 2. 이미 가지고 있지 않다면 달아줍니다.
+    if premium_role and premium_role not in user.roles:
+        user.roles.append(premium_role)
+        db.session.commit()
+        return True
+    return False 

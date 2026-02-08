@@ -1,6 +1,6 @@
 # tests/test_main.py
 import pytest
-from apps.dbmodels import User, Role, Permission
+from apps.dbmodels import User, Role, Payment, Permission
 from apps.extensions import db, mail
 
 def test_main_index(client):
@@ -20,7 +20,7 @@ def test_login_process(client, app):
             'confirm_password': 'password123'
         }, follow_redirects=True)
         assert len(outbox) == 1
-    
+
     with app.app_context():
         # 2. 가입된 유저를 찾아서 강제로 '이메일 인증' 처리
         user = User.query.filter_by(email='tester@example.com').first()
@@ -101,7 +101,6 @@ def test_expert_permission(client, app):
 
     # 2. 일반 유저로 로그인
     client.post('/auth/login', data={'email': 'normal@test.com', 'password': 'p1'}, follow_redirects=True)
-    
     # 3. [가정] 전문가 전용 페이지 접속 시도 'auth/expert-only'라고 할 때
     # (실제 뷰함수에 @permission_required('expert_service')가 달려있어야 함)
     response = client.get('/auth/expert-only') 
@@ -109,6 +108,17 @@ def test_expert_permission(client, app):
     # 4. 권한이 없으므로 403(Forbidden) 에러가 나야 성공!
     # (아직 /expert 페이지를 안 만들었다면 404가 날 수 있으니 나중에 페이지 만들고 확인하세요)
     assert response.status_code in [403, 404] 
+
+##
+def test_login_failure_invalid_password(client, app):
+    """비밀번호 틀렸을 때 실패하는지 확인"""
+    with app.app_context():
+        User.query.filter_by(email='f@t.com').delete()
+        db.session.add(User(username='f', email='f@t.com', password='correct', confirmed=True))
+        db.session.commit()
+    
+    response = client.post('/auth/login', data={'email': 'f@t.com', 'password': 'wrong'}, follow_redirects=True)
+    assert "확인 필요" in response.get_data(as_text=True)
 
 def test_logout_process(auth_client):
     """테스트 6: 로그아웃하면 비밀 페이지에 못 들어가는지 확인"""
@@ -158,3 +168,36 @@ def test_password_reset_request(client, app):
         # 3. 실제로 재설정 링크가 담긴 메일이 1통 발송되었는지 확인
         assert len(outbox) == 1
         assert "비밀번호 재설정" in outbox[0].subject
+
+def test_simulate_payment_success(auth_client, app): # auth, db_session 대신 auth_client, app 사용
+    """결제 성공 시나리오 테스트"""
+    # 1. auth_client는 이미 'testuser'로 로그인된 상태입니다. (conftest.py 참고)
+    with app.app_context():
+        user = User.query.filter_by(email='test@test.com').first()
+        # 처음에는 전문가 권한이 없는지 확인
+        assert user.can('expert_service') is False
+    # 2. 결제 시뮬레이션 버튼 클릭 (POST 요청)
+    response = auth_client.post('/simulate-payment', follow_redirects=True)
+    # 3. 결과 확인
+    assert response.status_code == 200
+    assert "결제가 성공했습니다!" in response.get_data(as_text=True)
+    # 4. DB 확인: 권한 및 영수증 체크
+    with app.app_context():
+        # 데이터베이스의 최신 상태를 확인하기 위해 다시 조회
+        user = User.query.filter_by(email='test@test.com').first()
+        assert user.can('expert_service') is True
+        
+        payment = Payment.query.filter_by(user_id=user.id).first()
+        assert payment is not None
+        assert payment.amount == 9900
+        assert payment.status == 'paid'
+
+def test_simulate_payment_fail_not_logged_in(client):
+    """로그인 안 한 상태에서 결제 시도 시 실패 테스트"""
+    # 로그인하지 않고 바로 결제 주소로 POST 요청
+    response = client.post('/simulate-payment', follow_redirects=True)
+    
+    # 로그인 페이지로 리다이렉트 되거나 '로그인이 필요합니다' 메시지가 떠야 함
+    assert "로그인이 필요합니다" in response.get_data(as_text=True)
+
+
