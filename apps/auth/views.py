@@ -9,12 +9,10 @@ from .forms import ResetPasswordForm, ResetPasswordRequestForm, SignUpForm, Logi
 from . import auth  # 현재 패키지(__init__.py)의 auth Blueprint 객체 임포트
 from apps.auth.decorators import permission_required # 경비원 임포트
 from flask_login import login_required
-
 # index 엔드포인트
 @auth.route("/")
 def index():
     return render_template("auth/index.html")
-
 # signup 엔드포인트
 @auth.route("/signup", methods=["GET", "POST"])
 def signup():
@@ -25,12 +23,10 @@ def signup():
             username=form.username.data, email=form.email.data,
             password=form.password.data, confirmed=False # 기본값 미인증
         )
-
         # [추가] 2. 'USER' 역할(이름표)을 찾아서 달아주기
         user_role = Role.query.filter_by(name='USER').first()
         if user_role:
             user.roles.append(user_role) # 다대다 관계이므로 append 사용!
-
         db.session.add(user)
         db.session.commit()
         # 토큰 생성 및 메일 발송
@@ -46,7 +42,6 @@ def signup():
         flash("가입 확인 메일이 발송되었습니다. 이메일을 확인해주세요.", "info")
         return redirect(url_for("auth.login"))
     return render_template("auth/signup.html", form=form)
-
 # login 엔드포인트
 @auth.route("/login",methods=["GET", "POST"])     
 def login():
@@ -71,14 +66,12 @@ def login():
         # 로그인 실패 메시지
         flash("이메일 주소 및 비번 확인 필요")
     return render_template("auth/login.html",form=form)
-
 # logout 엔드포인트 
 @auth.route("/logout")     
 def logout():
     # 사용자 로그아웃
     logout_user()
     return redirect(url_for("auth.login"))
-
 @auth.route('/confirm/<token>')
 def confirm_email(token):
     email = confirm_token(token, salt='email-confirm-salt')
@@ -94,7 +87,6 @@ def confirm_email(token):
         db.session.commit()
         flash('이메일 인증이 완료되었습니다!', 'success')
     return redirect(url_for('main.index'))
-
 @auth.route('/reset-password-request', methods=['GET', 'POST'])
 def reset_password_request():
     # 1. 이미 로그인한 사용자가 이 페이지에 오면 홈으로 보냅니다.
@@ -120,7 +112,6 @@ def reset_password_request():
         flash('비밀번호 재설정 지침이 담긴 이메일을 보냈습니다. 메일함을 확인해 주세요.', 'info')
         return redirect(url_for('auth.login'))
     return render_template('auth/reset_password_request.html', form=form)
-
 # 2. 실제 비밀번호 변경 페이지 (메일 링크 클릭 시 접속)
 @auth.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
@@ -145,14 +136,12 @@ def reset_password(token):
         flash('비밀번호가 변경되었습니다. 이제 새 비밀번호로 로그인하세요.', 'success')
         return redirect(url_for('auth.login'))
     return render_template('auth/reset_password.html', form=form)
-
 @auth.route('/login/google')
 def google_login():
     # 구글 로그인 페이지로 보내버리기
     redirect_uri = url_for('auth.google_authorize', _external=True)
     print(f"DEBUG: 생성된 리디렉션 주소는 -> {redirect_uri}") # 터미널 확인용
     return oauth.google.authorize_redirect(redirect_uri)
-
 @auth.route('/login/google/callback')
 def google_authorize():
     # 구글이 보낸 증명서를 확인하기

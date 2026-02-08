@@ -1,18 +1,16 @@
-# apps/utils.py (새로 만들기)
+#apps/utils.py
 from apps.extensions import db
 from apps.dbmodels import Role, Permission, User
-
 def seed_db(app):
     """데이터베이스에 기본 권한과 역할을 자동으로 채워주는 함수"""
-    
-    # 1. 우리가 쓸 권한(Permission) 목록
+    # 1. 권한(Permission) 목록 업데이트 (service_upload 추가!)
     perms = {
         'menu_view': '메뉴 보기 권한',
         'api_call': 'API 호출 권한',
         'admin_access': '관리자 페이지 접근 권한',
-        'expert_service': '전문가 서비스'
-    }
-    
+        'expert_service': '전문가 서비스 권한',
+        'service_upload': 'AI 서비스 업로드 권한' # 공급자용 권한 추가
+    }    
     # 2. 권한 테이블 채우기
     perm_objs = {}
     for name, desc in perms.items():
@@ -28,8 +26,10 @@ def seed_db(app):
     # 역할이름: [가져갈 권한들]
     roles_data = {
         'USER': ['menu_view', 'api_call'],
-        'EXPERT': ['menu_view', 'api_call', 'expert_service'],
-        'ADMIN': ['menu_view', 'api_call', 'expert_service', 'admin_access']
+        'PREMIUM': ['menu_view', 'api_call', 'expert_service'], # [추가] 결제하면 얻는 등급
+        'EXPERT': ['menu_view', 'api_call', 'expert_service'], 
+        'PROVIDER': ['menu_view', 'api_call', 'service_upload'], # [추가] AI 공급자 등급
+        'ADMIN': ['menu_view', 'api_call', 'expert_service', 'admin_access', 'service_upload']
     }
 
     for rname, pnames in roles_data.items():
@@ -38,11 +38,12 @@ def seed_db(app):
             role = Role(name=rname)
             db.session.add(role)
         
-        # 해당 역할에 권한들 쏙쏙 넣어주기
-        role.permissions = [perm_objs[pn] for pn in pnames]
+        # 해당 역할에 권한들 쏙쏙 넣어주기(업데이트)
+        #role.permissions = [perm_objs[pn] for pn in pnames]
+        role.permissions = [perm_objs[pn] for pn in pnames if pn in perm_objs]
     
     db.session.commit() # 역할 저장!
-    print("기본 권한 및 역할 설정 완료!")
+    print("기본 권한 및 역할(PREMIUM 포함) 설정 완료!")
 
     # 관리자 계정 생성 부분 수정
     admin_email = app.config.get('ADMIN_EMAIL')
@@ -59,8 +60,10 @@ def seed_db(app):
                 confirmed=True
             )
             # [수정] 역할들을 리스트에 추가
-            new_admin.roles.append(admin_role)
-            new_admin.roles.append(user_role)
+            # 관리자는 모든 권한을 다 가지도록 설정
+            if admin_role: new_admin.roles.append(admin_role)
+            if user_role: new_admin.roles.append(user_role)
             
             db.session.add(new_admin)
             db.session.commit()
+            print(f"관리자 계정 생성 완료: {admin_email}")
