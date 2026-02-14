@@ -51,8 +51,11 @@ def create_app(config_class=Config): # 설정 클래스를 인자로 받음(테�
 
     from .main import main
     from .auth import auth
+    from .provider import provider
+
     app.register_blueprint(main)
     app.register_blueprint(auth, url_prefix='/auth')
+    app.register_blueprint(provider, url_prefix='/provider')
 
     with app.app_context():
         # 1. 소셜 로그인 설정
@@ -60,7 +63,7 @@ def create_app(config_class=Config): # 설정 클래스를 인자로 받음(테�
         register_social_login(app)
         
         # 2. DB 테이블 생성 (운영시는 migrate 권장이나 초기엔 create_all)
-        db.drop_all()         # 운영시에는 커멘트 처리 필요
+        #db.drop_all()         # 운영시에는 커멘트 처리 필요
         db.create_all()
         
         # 3. [추가] 기본 권한/역할 자동 생성 실행!

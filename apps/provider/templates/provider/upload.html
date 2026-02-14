@@ -1,0 +1,15 @@
+<!-- apps/provider/templates/provider/upload.html -->
+{% extends "base.html" %}
+{% block content %}
+<h2>AI 서비스 등록 (공급자 전용)</h2>
+<p>파이썬 파일을 올리면 도커 실험실에서 즉시 테스트합니다.</p>
+
+<form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    
+    <div class="mb-3">
+        <input type="file" name="ai_code" class="form-control" accept=".py">
+    </div>
+    <button type="submit" class="btn btn-primary">업로드 및 도커 테스트 실행</button>
+</form>
+{% endblock %}
