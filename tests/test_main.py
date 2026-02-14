@@ -1,5 +1,5 @@
 # tests/test_main.py
-import pytest
+import pytest, io
 from apps.dbmodels import User, Role, Payment, Permission
 from apps.extensions import db, mail
 
@@ -200,4 +200,62 @@ def test_simulate_payment_fail_not_logged_in(client):
     # 로그인 페이지로 리다이렉트 되거나 '로그인이 필요합니다' 메시지가 떠야 함
     assert "로그인이 필요합니다" in response.get_data(as_text=True)
 
+def test_upload_page_access_denied_for_normal_user(auth_client):
+    """일반 유저(USER 역할)는 업로드 페이지에 접근할 수 없어야 함 (403 예상)"""
+    response = auth_client.get('/provider/upload')
+    # permission_required 데코레이터가 실패 시 403을 주거나 
+    # 혹은 메인으로 리다이렉트 시키는지 확인하세요.
+    assert response.status_code in [403, 302]
 
+def test_upload_page_access_granted_for_provider(client, app):
+    """PROVIDER 권한을 가진 유저는 업로드 페이지에 접근 가능해야 함"""
+    with app.app_context():
+        # 1. 역할 가져오기
+        provider_role = Role.query.filter_by(name='PROVIDER').first()
+        
+        # 2. PROVIDER 유저 생성
+        user = User(username='provider1', email='provider@test.com',
+                    password='password123', confirmed=True)
+        
+        if provider_role:
+            user.roles.append(provider_role)
+        
+        # 3. DB 저장 (app.extensions를 복잡하게 부를 필요 없이 db 직접 사용)
+        db.session.add(user)
+        db.session.commit()
+
+    # 4. 로그인 요청
+    client.post('/auth/login', data={
+        'email': 'provider@test.com',
+        'password': 'password123'
+    }, follow_redirects=True)
+
+    # 5. 페이지 접근 확인
+    response = client.get('/provider/upload')
+    assert response.status_code == 200
+    
+def test_ai_code_upload_and_docker_run(client, app):
+    """실제 파일 업로드 및 도커 실행 결과 테스트"""
+    # PROVIDER 로그인 과정 (위와 동일하게 권한 부여 필요)
+    with app.app_context():
+        from apps.extensions import db
+        provider_role = Role.query.filter_by(name='PROVIDER').first()
+        p_user = User(username='dev_user', email='dev@test.com', password='password123', confirmed=True)
+        p_user.roles.append(provider_role)
+        db.session.add(p_user)
+        db.session.commit()
+
+    client.post('/auth/login', data={'email': 'dev@test.com', 'password': 'password123'}, follow_redirects=True)
+
+    # 가짜 파이썬 파일 생성 (메모리 상에서 생성)
+    data = {
+        'ai_code': (io.BytesIO(b"print('Hello from Docker!')"), 'test_script.py'),
+    }
+
+    # 파일 업로드 요청 (CSRF 토큰 처리는 테스트 클라이언트에서 보통 무시되거나 수동 추가 필요)
+    # 만약 CSRF 에러가 나면 @csrf.exempt를 잠시 쓰거나 테스트 설정에서 WT_CSRF_ENABLED = False 확인
+    response = client.post('/provider/upload', data=data, content_type='multipart/form-data', follow_redirects=True)
+
+    assert response.status_code == 200
+    assert "테스트 성공!" in response.get_data(as_text=True)
+    assert "Hello from Docker!" in response.get_data(as_text=True)

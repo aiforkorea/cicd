@@ -16,6 +16,10 @@ class Config:
         os.makedirs(INSTANCE_DIR)
     SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(INSTANCE_DIR, 'mydb.sqlite3')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # uploads folder
+    UPLOADS_DIR = os.path.join(BASE_DIR, '..', 'uploads')
+    if not os.path.exists(UPLOADS_DIR):
+        os.makedirs(UPLOADS_DIR)
     # Flask-Login
     # REMEMBER_COOKIE_DURATION = 3600  # 1시간
     CSRF_ENABLED = True
